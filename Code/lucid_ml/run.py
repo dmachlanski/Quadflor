@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python36
 # -*- coding: utf-8 -*-
 import csv, json, random, sys, os, argparse, logging, datetime, traceback
 from collections import defaultdict
@@ -33,6 +33,11 @@ from sklearn.pipeline import FeatureUnion, make_pipeline, Pipeline
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.svm import LinearSVC
 import scipy.sparse as sps
+
+# dm18389: add more models
+from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
+# dm18389: END
 
 # imports for hyperparameter optimization
 from bayes_opt import BayesianOptimization
@@ -679,7 +684,23 @@ def create_classifier(options, num_concepts):
                                          epochs = options.max_iterations), 
                                      alpha=options.alpha, stepsize=0.01, verbose=options.verbose),
         "mlpthr": LinRegStack(mlp, verbose=options.verbose),
-        "mlpdt" : ClassifierStack(base_classifier=mlp, n_jobs=options.jobs, n=options.k)
+        "mlpdt" : ClassifierStack(base_classifier=mlp, n_jobs=options.jobs, n=options.k),
+        "dtree" : DecisionTreeClassifier(max_depth=options.max_depth,
+                                         min_samples_split=options.min_samples_split,
+                                         max_features=options.dt_max_features),
+        "xtree" : ExtraTreeClassifier(max_depth=options.max_depth,
+                                      min_samples_split=options.min_samples_split,
+                                      max_features=options.dt_max_features),
+        "xtrees" : ExtraTreesClassifier(n_estimators=options.n_estimators,
+                                        n_jobs=options.jobs,
+                                        max_depth=options.max_depth,
+                                        min_samples_split=options.min_samples_split,
+                                        max_features=options.dt_max_features),
+        "rforest" : RandomForestClassifier(n_estimators=options.n_estimators,
+                                           n_jobs=options.jobs,
+                                           max_depth=options.max_depth,
+                                           min_samples_split=options.min_samples_split,
+                                           max_features=options.dt_max_features)
     }
     # Transformation: either bm25 or tfidf included in pipeline so that IDF of test data is not considered in training
     norm = "l2" if options.norm else None
@@ -816,7 +837,8 @@ def _generate_parsers():
     classifier_options.add_argument('-f', '--classifier', dest="clf_key", default="nn", help=
     "Specify the final classifier.", choices=["nn", "brknna", "brknnb", "bbayes", "mbayes", "lsvc",
                                               "sgd", "sgddt", "rocchio", "rocchiodt", "logregress", "logregressdt",
-                                              "mlp", "listnet", "l2rdt", 'mlpthr', 'mlpdt', 'nam', 'mlpbase', "mlpsoph", "cnn", "lstm"])
+                                              "mlp", "listnet", "l2rdt", 'mlpthr', 'mlpdt', 'nam', 'mlpbase', "mlpsoph", "cnn", "lstm",
+                                              "dtree", "xtree", "xtrees", "rforest"])
     classifier_options.add_argument('-a', '--alpha', dest="alpha", type=float, default=1e-7, help= \
         "Specify alpha parameter for stochastic gradient descent")
     classifier_options.add_argument('-n', dest="k", type=int, default=1, help=
@@ -852,6 +874,13 @@ def _generate_parsers():
     classifier_options.add_argument('--batch_size', dest="batch_size", type=int, default=256, help=
     "Specify batch size for neural network training.")
     
+    # dm18389: decision tree specific options
+    decision_tree_options = parser.add_argument_group("Decision Tree Options")
+    decision_tree_options.add_argument('--max_depth', type=int, dest="max_depth", default=None, help="Maximum depth of a tree.")
+    decision_tree_options.add_argument('--dt_max_features', type=str, dest="dt_max_features", default=None, help="The number of features to consider when looking for the best split.")
+    decision_tree_options.add_argument('--min_samples_split', type=int, dest="min_samples_split", default=2, help="The minimum number of samples required to split an internal node.")
+    decision_tree_options.add_argument('--n_estimators', type=int, dest="n_estimators", default=10, help="Number of estimators within the ensemble.")
+
     # neural network specific options
     neural_network_options = parser.add_argument_group("Neural Network Options")
     neural_network_options.add_argument('--dropout', type=float, dest="dropout", default=0.5, help=
